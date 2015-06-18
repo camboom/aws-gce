@@ -13,3 +13,4 @@
   12. Type w to save results
 13. Reboot
 14. Use resize2fs to recognize new size, sudo resize2fs /dev/sda1
+sudo resize2fs /dev/sda1
