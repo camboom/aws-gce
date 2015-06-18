@@ -1,0 +1,75 @@
+#!/bin/bash
+# Google cloud snapshots script.
+#list of mailboxes
+mailboxes="someemail@email.com"
+mailtext=/tmp/mailtext$$
+ 
+# GCUTILPATH
+GCUTILPATH=/usr/local/share/google/google-cloud-sdk/bin/
+ 
+# Project name
+project=project-name
+ 
+# What need to backup, list - disks from list, all - all disks.
+backup="list"
+ 
+#List of persistent disks
+list="disk names"
+ 
+# Rotation, how many days to keep
+days=4
+##############################################################################
+log()
+{
+    echo `date +%y/%m/%d_%H:%M:%S`:: $* >> $mailtext
+    echo `date +%y/%m/%d_%H:%M:%S`:: $*
+}
+case $backup in
+                "all" )
+                disklist=`${GCUTILPATH}gcloud --project="$project" compute snapshots list --format=json | tail -n +2 | cut -d ',' -f1`
+                ;;
+                "list")
+                disklist=$list
+                ;;
+                *)
+                log "Nothing to backup"
+                exit 0
+                ;;
+esac
+ 
+function test {
+    "$@"
+    local status=$?
+    if [ $status -ne 0 ]; then
+        echo "error with $1"
+        mail -s "GOOGLE snapshot backup, ERROR. "  $mailboxes < $mailtext
+        exit $status
+    fi
+    return $status
+}
+ 
+for i in $disklist
+do
+log "Starting snapshot for $i"
+test ${GCUTILPATH}gcloud --project="$project" compute disks snapshot --snapshot-name $list"-`date +%y%m%d-%H%M`" --zone us-central1-b $list
+log "Snapshot for $i finished"
+done
+ 
+#Rotation
+for i in $disklist
+do
+snapshot="$i""-`date +%y%m%d-%H%M -d "$days days ago"`"
+exist=`${GCUTILPATH}gcloud --project="$project" compute snapshots list --format=json | grep $snapshot`
+        if [ -z $exist ];then
+        log "Warning, snapshot $snapshot was not found"
+        else
+        log "Starting rotation for $i"
+        test ${GCUTILPATH}gcloud --project="$project" deletesnapshot -f $snapshot
+        log "Rotation for $i finished"
+        fi
+done
+ 
+ 
+log "All done."
+ 
+test rm $mailtext
